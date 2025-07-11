@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa con Araña (GeoJSON)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiamFuYXJxMjgiLCJhIjoiY2x6MG51NGVyMHpyNTJrcHZ4ODd0NHQ5bSJ9.NQU_a0tdat5tUhWtZkNi_g';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/janarq28/cm7l9ijx3004k01smamzzgylz',
+      center: [-109.712, 23.064],
+      zoom: 17
+    });
+
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true
+    });
+
+    map.addControl(geolocate);
+
+    map.on('load', () => {
+      geolocate.trigger();
+
+      navigator.geolocation.getCurrentPosition(pos => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+
+        new mapboxgl.Marker({ color: 'blue' })
+          .setLngLat([userLng, userLat])
+          .setPopup(new mapboxgl.Popup().setText("Tu ubicación"))
+          .addTo(map);
+
+        // Carga tus centroides reales
+        fetch('Centroides.geojson')
+          .then(res => res.json())
+          .then(data => {
+            data.features.forEach((feature) => {
+              const [lng, lat] = feature.geometry.coordinates;
+              const nombre = feature.properties?.nombre || 'Punto';
+
+              const distancia = calcDist(userLat, userLng, lat, lng);
+              if (distancia <= 100) {
+                new mapboxgl.Marker({ color: 'red' })
+                  .setLngLat([lng, lat])
+                  .setPopup(new mapboxgl.Popup().setText(nombre))
+                  .addTo(map);
+
+                drawLine([userLng, userLat], [lng, lat]);
+              }
+            });
+          });
+      });
+    });
+
+    function drawLine(origen, destino) {
+      const id = `line-${Math.random().toString(36).substr(2, 9)}`;
+      map.addSource(id, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [origen, destino]
+          }
+        }
+      });
+      map.addLayer({
+        id: id,
+        type: 'line',
+        source: id,
+        paint: {
+          'line-color': '#ff6600',
+          'line-width': 2
+        }
+      });
+    }
+
+    function calcDist(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const toRad = deg => deg * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+  </script>
+</body>
+</html>
